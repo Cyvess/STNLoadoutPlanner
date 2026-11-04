@@ -1,6 +1,6 @@
 /* Catalog adapted from the user-provided STNShowcase reference. */
 (async()=>{
-const {MODES,freshState,freshRun,normalizeState,playerLabel,movePlayer,stats}=await import('./model.js');
+const {MODES,freshState,freshRun,normalizeState,createLineupBackup,readLineupBackup,restoreLineupBackup,playerLabel,movePlayer,stats}=await import('./model.js');
 const {summarize,summarySections,summaryColumns}=await import('./summary.js');
 const icons={
  shield:'<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/>',
@@ -111,12 +111,12 @@ const menu=$('#moreMenu');function closeMenu(){menu.hidden=true;$('#moreButton')
 $('#moreButton').onclick=()=>{menu.hidden=!menu.hidden;$('#moreButton').setAttribute('aria-expanded',String(!menu.hidden));};
 document.addEventListener('click',e=>{if(!e.target.closest('.menu-wrap'))closeMenu();});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);}
-$('#exportBackup').onclick=()=>{download(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),'stn-clan-run-backup.json');closeMenu();toast('Backup downloaded · all four modes included');};
+$('#exportBackup').onclick=()=>{download(new Blob([JSON.stringify(createLineupBackup(state),null,2)],{type:'application/json'}),`stn-${state.activeMode}-lineup-backup.json`);closeMenu();toast(`${currentMode().name} backup downloaded · import into any mode`);};
 function confirmAction(title,message,action){$('#confirmTitle').textContent=title;$('#confirmMessage').textContent=message;$('#acceptConfirm').onclick=()=>{$('#confirmDialog').close();action();};$('#confirmDialog').showModal();}
 $('#cancelConfirm').onclick=()=>$('#confirmDialog').close();
 $('#resetMode').onclick=()=>{closeMenu();confirmAction(`Reset ${currentMode().name} lineup?`,'This clears the names and loadouts in this mode. Download a backup first if you want to keep a copy.',()=>{state.runs[state.activeMode]=freshRun(currentMode());save();render();toast('Lineup reset');});};
 $('#importBackup').onclick=()=>{closeMenu();$('#backupFile').click();};
-$('#backupFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;try{if(file.size>1000000)throw new Error('Choose a Clan Run backup smaller than 1 MB.');const imported=normalizeState(JSON.parse(await file.text()),CATALOG);confirmAction('Restore this backup?','This replaces all four mode lineups saved on this browser.',()=>{state=imported;save();render();toast('All four lineups restored');});}catch(err){toast(err instanceof SyntaxError?'That file is not valid JSON.':err.message);}};
+$('#backupFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;const targetMode={...currentMode()};try{if(file.size>1000000)throw new Error('Choose a Clan Run backup smaller than 1 MB.');const backup=JSON.parse(await file.text()),imported=readLineupBackup(backup,CATALOG),source=MODES.find(m=>m.id===imported.sourceMode);confirmAction(`Import into ${targetMode.name}?`,`This replaces only your ${targetMode.name} lineup with the ${source.name} backup. Your other modes stay as they are.`,()=>{state=restoreLineupBackup(state,backup,CATALOG,targetMode.id);save();render();toast(`Backup imported into ${targetMode.name}`);});}catch(err){toast(err instanceof SyntaxError?'That file is not valid JSON.':err.message);}};
 const imageCache=new Map();async function getItemImage(item){if(imageCache.has(item.img))return imageCache.get(item.img);const promise=new Promise(resolve=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=item.img;});imageCache.set(item.img,promise);return promise;}
 // Both copy and download render the same snapshot of the active ten-player lineup.
 async function createLineupImage(run,mode){
