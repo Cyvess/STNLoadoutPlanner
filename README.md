@@ -21,6 +21,8 @@ Older backups containing all four modes are also supported: import uses the mode
 
 Copy for Discord and Download Loadouts export the current lineup as a PNG. If image clipboard access is unavailable, the planner offers an image download.
 
+The last row under Units in Overall Stats shows Total unit slots: the number of equipped towers, farms, and support bases across the selected mode's team. Pets, empty slots, and disabled fifth slots are excluded. Units with missing stat data still count. The same total appears in PNG exports.
+
 ## Reference data
 
 Game catalog names and artwork originated from https://lordjunes.github.io/STNShowcase/ . Game stats and stacking rules were supplied by Cyves. This is an unofficial clan planning tool.

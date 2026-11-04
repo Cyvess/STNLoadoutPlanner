@@ -47,10 +47,10 @@ export function summarize(run,catalog){
    if(!independent&&!data.condition)for(const [key,value]of Object.entries(totals))if(GLOBAL_KEYS.has(key))petTotals[key]=(petTotals[key]||0)+value;
    petGroups.push({name,count:copies.length,independent,condition:data.condition,contributions,totals});
  }
- const farms=[],towers=[],unknownUnits=[];
+ const farms=[],towers=[],unknownUnits=[],unitSlots=selected.filter(s=>s.role!=='PET');
  const support={militaryDamage:0,militaryRange:0,protectorSpeed:0,medicalRepair:0,shieldCooldowns:[],militaryCount:0,protectorCount:0,medicalCount:0};
  let baseIncome=0,baseDamage=0,damageKnown=0;
- for(const slot of selected.filter(s=>s.role!=='PET')){
+ for(const slot of unitSlots){
    const data=GAME_DATA.units[slot.item],row=data?.levels.find(l=>l.level===slot.level);
    if(!row){unknownUnits.push({...slot,reason:data?'This level was not supplied':'Stats not supplied'});continue;}
    if(slot.role==='FARM'){
@@ -73,7 +73,7 @@ export function summarize(run,catalog){
    if(slot.item==='Medical Base'){support.medicalCount++;support.medicalRepair+=row.repair_percent/row.repair_interval_seconds;}
  }
  const damageMissing=selected.filter(s=>s.role==='DAMAGE').length-damageKnown;
- return {petTotals,petGroups,petCounts:[...petCounts].sort(([a],[b])=>a.localeCompare(b)).map(([name,count])=>({name,count})),petCount:selected.filter(s=>s.role==='PET').length,unknownPets,unknownUnits,farms,towers,support,baseIncome,baseDamage,damageKnown,damageMissing};
+ return {petTotals,petGroups,petCounts:[...petCounts].sort(([a],[b])=>a.localeCompare(b)).map(([name,count])=>({name,count})),petCount:selected.filter(s=>s.role==='PET').length,unitCount:unitSlots.length,unknownPets,unknownUnits,farms,towers,support,baseIncome,baseDamage,damageKnown,damageMissing};
 }
 
 // Presentation contains aggregate values only, and only for equipped effects.
@@ -90,6 +90,7 @@ export function summarySections(s){
  if(s.damageMissing)row(units,'Damage data missing',`${s.damageMissing} tower${s.damageMissing===1?'':'s'}`);
  const otherUnknown=s.unknownUnits.filter(u=>u.role!=='DAMAGE').length;
  if(otherUnknown)row(units,'Unit data missing',`${otherUnknown} unit${otherUnknown===1?'':'s'}`);
+ if(s.unitCount)row(units,'Total unit slots',String(s.unitCount));
  const p=s.support;
  if(p.medicalCount)row(support,'Medical Base',String(p.medicalCount));
  if(p.protectorCount)row(support,'Protector Base',String(p.protectorCount));
