@@ -21,7 +21,7 @@ Older backups containing all four modes are also supported: import uses the mode
 
 Copy for Discord and Download Loadouts export the current lineup as a PNG. If image clipboard access is unavailable, the planner offers an image download.
 
-The last row under Units in Overall Stats shows Total unit slots: the number of equipped towers, farms, and support bases across the selected mode's team. Pets, empty slots, and disabled fifth slots are excluded. Units with missing stat data still count. The same total appears in PNG exports.
+The last row under Units in Overall Stats shows Total units: the sum of placement quantities for equipped towers, farms, and support bases across the selected mode's team. For example, two Medical Base loadout entries allow 2 × 4 = 8 units. Pets, empty slots, and disabled fifth slots are excluded. Quantities from Cy's supplied list are preserved in unit-quantities.js, including Crossbow and Turret for future catalog additions. Units with missing damage data still contribute their known quantity. If an equipped unit's quantity is unknown, the total shows the known quantity plus ? and reports the affected slot count. The same total appears in PNG exports. This quantity total does not multiply the existing base-stat calculations or equipped-item counts.
 
 ## Reference data
 
