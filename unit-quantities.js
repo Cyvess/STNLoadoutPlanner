@@ -10,6 +10,7 @@ export const UNIT_QUANTITIES = Object.freeze({
   'Railgun':7,
   'Samurai':9,
   'Void Farm':10,
+  'Farm':10,
   'World Ender':6,
   'Ballista':8,
   'Fire Spitter':10,
