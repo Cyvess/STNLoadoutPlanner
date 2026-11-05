@@ -51,5 +51,27 @@ export function restoreLineupBackup(state,input,catalog,targetMode=state.activeM
   return {...state,runs:{...state.runs,[targetMode]:run}};
 }
 export function movePlayer(run,from,to){if(from<0||to<0||from>=10||to>=10||from===to)return false;const [p]=run.players.splice(from,1);run.players.splice(to,0,p);return true;}
+export function itemTransferError(run,from,to){
+  const source=run.players.find(p=>p.id===from?.id),target=run.players.find(p=>p.id===to?.id);
+  const active=(player,slot)=>player&&Number.isInteger(slot)&&slot>=0&&slot<player.capacity;
+  if(!active(source,from?.slot)||!active(target,to?.slot))return 'Choose an unlocked loadout slot.';
+  if(source===target&&from.slot===to.slot)return 'Drop onto another slot.';
+  if(!source.slots[from.slot])return 'Choose an equipped item to move.';
+  const sourceSlots=source.slots.slice(),targetSlots=source===target?sourceSlots:target.slots.slice();
+  sourceSlots[from.slot]=target.slots[to.slot];targetSlots[to.slot]=source.slots[from.slot];
+  for(const slots of [sourceSlots,targetSlots]){
+    const names=slots.filter(Boolean).map(s=>s.item);
+    if(new Set(names).size!==names.length)return 'That move would put the same item twice in a loadout.';
+  }
+  return null;
+}
+export function transferItem(run,from,to){
+  const error=itemTransferError(run,from,to);
+  if(error)return {ok:false,error};
+  const source=run.players.find(p=>p.id===from.id),target=run.players.find(p=>p.id===to.id);
+  const swapped=Boolean(target.slots[to.slot]);
+  [source.slots[from.slot],target.slots[to.slot]]=[target.slots[to.slot],source.slots[from.slot]];
+  return {ok:true,swapped};
+}
 export function stats(run){return run.players.reduce((r,p)=>{const n=p.slots.slice(0,p.capacity).filter(Boolean).length;return {equipped:r.equipped+(n>0?1:0),filled:r.filled+n,total:r.total+p.capacity};},{equipped:0,filled:0,total:0});}
 export function discordText(run,mode){return [`${run.title.trim()||`${mode.name} clan run`} · ${mode.name}`,`10-player clan lineup`,'',...run.players.map((p,i)=>`${i+1}. ${playerLabel(p,i)} [${p.capacity} slots]\n${p.slots.slice(0,p.capacity).map((s,n)=>`   ${n+1}. ${s?`${s.item} · Lv. ${s.level}`:'—'}`).join('\n')}`)].join('\n');}

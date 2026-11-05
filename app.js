@@ -1,6 +1,6 @@
 /* Catalog adapted from the user-provided STNShowcase reference. */
 (async()=>{
-const {MODES,freshState,freshRun,normalizeState,createLineupBackup,readLineupBackup,restoreLineupBackup,playerLabel,movePlayer,stats}=await import('./model.js');
+const {MODES,freshState,freshRun,normalizeState,createLineupBackup,readLineupBackup,restoreLineupBackup,playerLabel,movePlayer,itemTransferError,transferItem,stats}=await import('./model.js');
 const {summarize,summarySections,summaryColumns}=await import('./summary.js');
 const icons={
  shield:'<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6z"/><path d="m8 12 3 3 5-6"/>',
@@ -46,12 +46,13 @@ function render(){
  $('#runTitle').value=currentRun().title;$('#modeName').textContent=mode.name;$('#modeSymbol').innerHTML=svg(mode.symbol);renderPlayers();updateStats();
 }
 function renderPlayers(){
+ if(pointerDrag)cancelPointerDrag();
  $('#players').innerHTML=currentRun().players.map((p,i)=>{
  const filled=p.slots.slice(0,p.capacity).filter(Boolean).length,label=playerLabel(p,i);
  return `<article class="player-card" data-id="${p.id}" aria-label="${esc(label)} loadout"><div class="card-header"><button class="drag-handle" draggable="false" aria-label="Drag ${esc(label)} to reorder" title="Drag to reorder">${svg('grip')}</button><span class="player-number">${String(i+1).padStart(2,'0')}</span><input class="player-name" maxlength="40" value="${esc(p.name)}" placeholder="Player #${i+1}" aria-label="Name for player ${i+1}" title="Edit player name" autocomplete="off"><div class="capacity-control"><span>Loadout slots</span><div class="slot-toggle" role="group" aria-label="Slot count for ${esc(label)}"><button data-capacity="4" class="${p.capacity===4?'selected':''}" aria-pressed="${p.capacity===4}">4 slots</button><button data-capacity="5" class="${p.capacity===5?'selected':''}" aria-pressed="${p.capacity===5}">5 slots</button></div></div></div><div class="loadout-slots">${p.slots.map((s,n)=>{
- if(n>=p.capacity)return `<div class="slot-wrap"><div class="item-slot locked" aria-label="Slot 5 disabled. Switch to 5 slots to use it.">${svg('lock')}<span class="empty-label">5-slot only</span></div></div>`;
+ if(n>=p.capacity)return `<div class="slot-wrap"><div class="item-slot locked" data-locked-slot="${n}" aria-label="Slot 5 disabled. Switch to 5 slots to use it.">${svg('lock')}<span class="empty-label">5-slot only</span></div></div>`;
  const item=s?CATALOG.find(x=>x.name===s.item):null;
- return `<div class="slot-wrap"><button class="item-slot ${item?'equipped':''}" data-slot="${n}" ${item?`style="--rarity:${item.hex}"`:''} aria-label="${item?`Change ${esc(item.name)}`:`Add item to slot ${n+1}`} for ${esc(label)}"><span class="slot-index">${n+1}</span>${item?`<img src="${item.img}" alt="" draggable="false"><span class="item-name">${esc(item.name)}</span>`:'<span class="plus">+</span><span class="empty-label">Add item</span>'}</button>${item?`<select class="level-input" data-level="${n}" title="Change ${esc(item.name)} level (max ${item.max})" aria-label="${esc(item.name)} level for ${esc(label)}">${Array.from({length:item.max},(_,l)=>`<option value="${l+1}" ${s.level===l+1?'selected':''}>Lv. ${l+1}</option>`).join('')}</select>`:''}</div>`;
+ return `<div class="slot-wrap"><button class="item-slot ${item?'equipped':''}" data-slot="${n}" draggable="false" title="${item?'Drag to move or swap; click to change':'Choose an item'}" ${item?`style="--rarity:${item.hex}"`:''} aria-label="${item?`Change ${esc(item.name)}`:`Add item to slot ${n+1}`} for ${esc(label)}"><span class="slot-index">${n+1}</span>${item?`<img src="${item.img}" alt="" draggable="false"><span class="item-name">${esc(item.name)}</span>`:'<span class="plus">+</span><span class="empty-label">Add item</span>'}</button>${item?`<select class="level-input" data-level="${n}" title="Change ${esc(item.name)} level (max ${item.max})" aria-label="${esc(item.name)} level for ${esc(label)}">${Array.from({length:item.max},(_,l)=>`<option value="${l+1}" ${s.level===l+1?'selected':''}>Lv. ${l+1}</option>`).join('')}</select>`:''}</div>`;
  }).join('')}</div><div class="card-footer"><span class="equipped-count ${filled===p.capacity?'complete':''}">${filled===p.capacity?'Loadout ready':`${filled} of ${p.capacity} equipped`}</span><div class="card-move-buttons"><button data-move="-1" ${i===0?'disabled':''} aria-label="Move ${esc(label)} up" title="Move up">↑</button><button data-move="1" ${i===9?'disabled':''} aria-label="Move ${esc(label)} down" title="Move down">↓</button></div></div></article>`;
  }).join('');
 }
@@ -67,29 +68,88 @@ $('#players').addEventListener('click',e=>{
  if(slot)openPicker(p.id,Number(slot.dataset.slot));
  if(move){const from=currentRun().players.indexOf(p);if(movePlayer(currentRun(),from,from+Number(move.dataset.move))){save();renderPlayers();const focus=$(`[data-id="${p.id}"] [data-move="${move.dataset.move}"]`);if(!focus.disabled)focus.focus();toast(`${playerLabel(p,currentRun().players.indexOf(p))} moved to position ${currentRun().players.indexOf(p)+1}`);}}
 });
-// Pointer capture keeps dragging consistent for mouse, touch, and pen.
-let pointerDrag=null;
+// Player handles reorder cards; equipped item tiles move or swap their contents.
+let pointerDrag=null,suppressedDropClick=null;
+document.addEventListener('click',e=>{
+ if(suppressedDropClick&&e.detail>0&&performance.now()<suppressedDropClick.until&&Math.hypot(e.clientX-suppressedDropClick.x,e.clientY-suppressedDropClick.y)<12){e.preventDefault();e.stopImmediatePropagation();suppressedDropClick=null;}
+},true);
 $('#players').addEventListener('pointerdown',e=>{
- const handle=e.target.closest('.drag-handle');if(!handle||e.button!==0)return;
- e.preventDefault();handle.focus();handle.setPointerCapture(e.pointerId);
- pointerDrag={pointer:e.pointerId,x:e.clientX,y:e.clientY,id:handle.closest('[data-id]').dataset.id,started:false,target:null};
+ if(pointerDrag||e.button!==0||e.isPrimary===false)return;
+ const handle=e.target.closest('.drag-handle'),item=e.target.closest('.item-slot.equipped'),control=handle||item;if(!control)return;
+ if(handle){e.preventDefault();handle.focus();}
+ control.setPointerCapture(e.pointerId);
+ pointerDrag={type:handle?'player':'item',pointer:e.pointerId,x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,id:control.closest('[data-id]').dataset.id,slot:item?Number(item.dataset.slot):null,mode:state.activeMode,control,started:false,target:null,preview:null,frame:null};
 });
+function itemDropTarget(x,y){
+ const tile=document.elementFromPoint(x,y)?.closest('#players .item-slot');
+ if(!tile)return null;
+ return {tile,id:tile.closest('[data-id]').dataset.id,slot:Number(tile.dataset.slot??tile.dataset.lockedSlot)};
+}
+function highlightItemTarget(d){
+ document.querySelectorAll('.item-drop-target,.item-drop-invalid').forEach(tile=>{tile.classList.remove('item-drop-target','item-drop-invalid');delete tile.dataset.dropAction;});
+ const target=itemDropTarget(d.clientX,d.clientY);d.target=target;
+ if(!target||(target.id===d.id&&target.slot===d.slot))return;
+ const error=itemTransferError(currentRun(),{id:d.id,slot:d.slot},target);
+ target.tile.classList.add(error?'item-drop-invalid':'item-drop-target');
+ target.tile.dataset.dropAction=error?'Blocked':target.tile.classList.contains('equipped')?'Swap':'Move';
+}
+function animateItemDrag(){
+ const d=pointerDrag;if(!d||d.type!=='item'||!d.started)return;
+ const edge=80,rawSpeed=d.clientY<edge?-Math.ceil((edge-d.clientY)/5):d.clientY>innerHeight-edge?Math.ceil((d.clientY-innerHeight+edge)/5):0,speed=Math.max(-24,Math.min(24,rawSpeed));
+ if(speed)window.scrollBy(0,speed);
+ highlightItemTarget(d);
+ d.frame=requestAnimationFrame(animateItemDrag);
+}
 document.addEventListener('pointermove',e=>{
  if(!pointerDrag||e.pointerId!==pointerDrag.pointer)return;
- if(!pointerDrag.started&&Math.hypot(e.clientX-pointerDrag.x,e.clientY-pointerDrag.y)<6)return;
+ if(pointerDrag.mode!==state.activeMode){cancelPointerDrag();return;}
+ const d=pointerDrag;d.clientX=e.clientX;d.clientY=e.clientY;
+ if(!d.started&&Math.hypot(e.clientX-d.x,e.clientY-d.y)<8)return;
+ if(d.type==='item'){
+   e.preventDefault();
+   if(!d.started){
+     d.started=true;d.control.classList.add('item-drag-source');document.body.classList.add('item-drag-active');
+     const rect=d.control.getBoundingClientRect(),preview=d.control.cloneNode(true);preview.className='item-slot equipped item-drag-preview';preview.removeAttribute('data-slot');preview.setAttribute('aria-hidden','true');preview.tabIndex=-1;
+     preview.style.width=`${Math.min(120,Math.max(80,rect.width))}px`;preview.style.height=`${Math.min(160,Math.max(95,rect.height))}px`;
+     document.body.append(preview);d.preview=preview;d.frame=requestAnimationFrame(animateItemDrag);
+   }
+   d.preview.style.transform=`translate3d(${Math.max(4,Math.min(innerWidth-d.preview.offsetWidth-4,e.clientX+14))}px,${Math.max(4,Math.min(innerHeight-d.preview.offsetHeight-4,e.clientY+14))}px,0)`;
+   highlightItemTarget(d);return;
+ }
  pointerDrag.started=true;dragId=pointerDrag.id;$(`[data-id="${dragId}"]`).classList.add('dragging');
  const card=document.elementFromPoint(e.clientX,e.clientY)?.closest('.player-card');
  document.querySelectorAll('.drop-target').forEach(c=>c.classList.remove('drop-target'));
  pointerDrag.target=card?.dataset.id||null;if(card&&card.dataset.id!==dragId)card.classList.add('drop-target');
  if(e.clientY>innerHeight-65)window.scrollBy(0,14);else if(e.clientY<65)window.scrollBy(0,-14);
-});
+},{passive:false});
+function cancelPointerDrag(){
+ const d=pointerDrag;pointerDrag=null;dragId=null;
+ if(d?.frame)cancelAnimationFrame(d.frame);d?.preview?.remove();
+ if(d?.control.hasPointerCapture(d.pointer))d.control.releasePointerCapture(d.pointer);
+ document.body.classList.remove('item-drag-active');
+ document.querySelectorAll('.dragging,.drop-target,.item-drag-source,.item-drop-target,.item-drop-invalid').forEach(tile=>{tile.classList.remove('dragging','drop-target','item-drag-source','item-drop-target','item-drop-invalid');delete tile.dataset.dropAction;});
+ return d;
+}
 function finishDrag(e){
  if(!pointerDrag||e.pointerId!==pointerDrag.pointer)return;
- const d=pointerDrag;pointerDrag=null;dragId=null;
+ const d=pointerDrag;
+ if(d.type==='item'){
+   const target=itemDropTarget(e.clientX,e.clientY);cancelPointerDrag();
+   if(!d.started)return;
+   suppressedDropClick={x:e.clientX,y:e.clientY,until:performance.now()+300};
+   if(e.type!=='pointerup'||d.mode!==state.activeMode||!target||(target.id===d.id&&target.slot===d.slot))return;
+   const result=transferItem(currentRun(),{id:d.id,slot:d.slot},target);
+   if(!result.ok){toast(result.error);return;}
+   save();renderPlayers();$(`[data-id="${target.id}"] [data-slot="${target.slot}"]`)?.focus();toast(result.swapped?'Items swapped':'Item moved');return;
+ }
+ cancelPointerDrag();
  if(e.type==='pointerup'&&d.started&&d.target){const players=currentRun().players,from=players.findIndex(p=>p.id===d.id),to=players.findIndex(p=>p.id===d.target);if(movePlayer(currentRun(),from,to)){save();renderPlayers();$(`[data-id="${d.id}"] .drag-handle`).focus();toast(`Player moved to position ${to+1}`);return;}}
  document.querySelectorAll('.dragging,.drop-target').forEach(c=>c.classList.remove('dragging','drop-target'));
 }
 document.addEventListener('pointerup',finishDrag);document.addEventListener('pointercancel',finishDrag);
+$('#players').addEventListener('lostpointercapture',e=>{if(pointerDrag?.pointer===e.pointerId)cancelPointerDrag();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&pointerDrag){cancelPointerDrag();e.preventDefault();}});
+window.addEventListener('blur',()=>{if(pointerDrag)cancelPointerDrag();});
 function openPicker(id,slot){pickerTarget={id,slot};$('#itemSearch').value='';const p=currentRun().players.find(p=>p.id===id),i=currentRun().players.indexOf(p);$('#pickerTitle').textContent=`Choose an item`;$('#pickerSubtitle').textContent=`${playerLabel(p,i)} · Slot ${slot+1} of ${p.capacity}`;$('#removeItem').hidden=!p.slots[slot];renderCatalog();$('#picker').showModal();$('#itemSearch').focus();}
 function renderCatalog(){
  $('#categoryTabs').innerHTML=PICKER_CATEGORIES.map(([key,name])=>`<button data-category="${key}" class="${category===key?'active':''}" aria-pressed="${category===key}">${name}</button>`).join('');
