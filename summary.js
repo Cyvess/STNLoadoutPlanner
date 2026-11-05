@@ -49,8 +49,9 @@ export function summarize(run,catalog){
    petGroups.push({name,count:copies.length,independent,condition:data.condition,contributions,totals});
  }
  const farms=[],towers=[],unknownUnits=[],unitSlots=selected.filter(s=>s.role!=='PET');
- let unitQuantity=0,unitQuantityMissing=0;
+ let unitQuantity=0,unitQuantityMissing=0;const unitCounts={};
  for(const slot of unitSlots){
+   unitCounts[slot.item]=(unitCounts[slot.item]||0)+1;
    const quantity=UNIT_QUANTITIES[slot.item];
    if(Number.isInteger(quantity)&&quantity>0)unitQuantity+=quantity;
    else unitQuantityMissing++;
@@ -80,21 +81,20 @@ export function summarize(run,catalog){
    if(slot.item==='Medical Base'){support.medicalCount++;support.medicalRepair+=row.repair_percent/row.repair_interval_seconds;}
  }
  const damageMissing=selected.filter(s=>s.role==='DAMAGE').length-damageKnown;
- return {petTotals,petGroups,petCounts:[...petCounts].sort(([a],[b])=>a.localeCompare(b)).map(([name,count])=>({name,count})),petCount:selected.filter(s=>s.role==='PET').length,unitCount:unitSlots.length,unitQuantity,unitQuantityMissing,unknownPets,unknownUnits,farms,towers,support,baseIncome,baseDamage,damageKnown,damageMissing};
+ return {petTotals,petGroups,petCounts:[...petCounts].sort(([a],[b])=>a.localeCompare(b)).map(([name,count])=>({name,count})),petCount:selected.filter(s=>s.role==='PET').length,unitCount:unitSlots.length,unitCounts,unitQuantity,unitQuantityMissing,unknownPets,unknownUnits,farms,towers,support,baseIncome,baseDamage,damageKnown,damageMissing};
 }
 
 // Presentation contains aggregate values only, and only for equipped effects.
 export function summarySections(s){
  const units=[],support=[],pets=[],totalPets=[];
- const row=(rows,label,value)=>rows.push({label,value});
+ const row=(rows,label,value,item)=>rows.push({label,value,...(item?{item}:{})});
  const metric=(rows,label,key,value)=>{if(Number.isFinite(value)&&Math.abs(value)>1e-10)row(rows,label,metricValue(key,value));};
- if(s.damageKnown)row(units,'Base damage / volley',number(s.baseDamage));
  if(s.farms.length)row(units,'Base production',`${s.farms.some(f=>f.approximate)?'~':''}$${number(s.baseIncome)}/s`);
  const banks=s.farms.filter(f=>f.item==='The Bank');
- if(banks.length)row(units,`Bank (${banks.length})`,`$${number(banks.reduce((total,bank)=>total+bank.payout,0))} / cycle`);
+ if(banks.length)row(units,`Bank (${banks.length})`,`$${number(banks.reduce((total,bank)=>total+bank.payout,0))} / cycle`,'The Bank');
+ for(const name of ['Juggernaut','Machine Mortar'])if(s.unitCounts[name])row(units,`${name} (${s.unitCounts[name]})`,'',name);
  const slows=s.towers.map(t=>t.slow).filter(Number.isFinite);
  if(slows.length)row(units,'Turret slow (strongest)',`${number(Math.max(...slows))}%`);
- if(s.damageMissing)row(units,'Damage data missing',`${s.damageMissing} tower${s.damageMissing===1?'':'s'}`);
  const otherUnknown=s.unknownUnits.filter(u=>u.role!=='DAMAGE').length;
  if(otherUnknown)row(units,'Unit data missing',`${otherUnknown} unit${otherUnknown===1?'':'s'}`);
  if(s.unitQuantityMissing)row(units,'Quantity data missing',`${s.unitQuantityMissing} slot${s.unitQuantityMissing===1?'':'s'}`);
@@ -105,10 +105,10 @@ export function summarySections(s){
  if(p.militaryCount)row(support,'Military Base',String(p.militaryCount));
  for(const [key,value]of Object.entries(s.petTotals))metric(pets,METRICS[key]?.[0]||key,key,value);
  if(s.unknownPets.length)row(pets,'Pet data missing',`${s.unknownPets.length} pet${s.unknownPets.length===1?'':'s'}`);
- for(const pet of s.petCounts)row(totalPets,pet.name,String(pet.count));
+ for(const pet of s.petCounts)row(totalPets,pet.name,String(pet.count),pet.name);
  return [['Units',units],['Support',support],['Pet bonuses',pets],['Total Pets',totalPets]]
    .filter(([,metrics])=>metrics.length)
-   .map(([title,metrics])=>({title,metrics,lines:metrics.map(m=>`${m.label}: ${m.value}`)}));
+   .map(([title,metrics])=>({title,metrics,lines:metrics.map(m=>m.value?`${m.label}: ${m.value}`:m.label)}));
 }
 
 // Fixed column positions are shared by the planner and lineup image.

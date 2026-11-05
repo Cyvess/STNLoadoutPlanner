@@ -23,6 +23,8 @@ Copy for Discord and Download Loadouts export the current lineup as a PNG. If im
 
 Drag an equipped unit or pet onto another unlocked slot to move it or swap with the item already there. Levels travel with the items, within one player or between players in the selected mode. Drops that would create duplicate items in either player's loadout are blocked, including duplicates in a retained disabled fifth slot. Click or tap an item to change it through the picker. Use each player's grip handle to reorder the entire player card.
 
+The Units summary lists Bank, Juggernaut, and Machine Mortar in that order when equipped. Counts in parentheses represent equipped loadout slots. Bank also shows its combined cycle payout. Base damage and missing-damage notices are omitted. These three unit names and every Total Pets entry have a small catalog icon, including in PNG exports.
+
 The last row under Units in Overall Stats shows Total units: the sum of placement quantities for equipped towers, farms, and support bases across the selected mode's team. For example, two Medical Base loadout entries allow 2 × 4 = 8 units. Pets, empty slots, and disabled fifth slots are excluded. Quantities from Cy's supplied list are preserved in unit-quantities.js, including Crossbow and Turret for future catalog additions. Units with missing damage data still contribute their known quantity. If an equipped unit's quantity is unknown, the total shows the known quantity plus ? and reports the affected slot count. The same total appears in PNG exports. This quantity total does not multiply the existing base-stat calculations or equipped-item counts.
 
 ## Reference data

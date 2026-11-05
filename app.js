@@ -37,7 +37,7 @@ function renderOverallStats(){
  const target=$('#overallStats'),sections=summarySections(summarize(currentRun(),CATALOG));
  target.hidden=sections.length===0;
  const jump=$('.stats-jump');if(jump)jump.hidden=target.hidden;
- const metricMarkup=m=>`<div><dt>${esc(m.label)}</dt><dd>${esc(m.value)}</dd></div>`;
+ const metricMarkup=m=>{const item=m.item?CATALOG.find(i=>i.name===m.item):null;return `<div><dt>${item?`<img class="intel-item-icon" src="${esc(item.img)}" alt="" width="24" height="24" decoding="async">`:''}<span>${esc(m.label)}</span></dt>${m.value?`<dd>${esc(m.value)}</dd>`:''}</div>`;};
  target.innerHTML=sections.length?`<div class="intel-heading"><div><div class="section-kicker">RUN INTEL</div><h2>Overall stats</h2></div></div><div class="intel-sections">${summaryColumns(sections).map((column,index)=>column.length?`<div class="intel-column" style="--column:${index+1}">${column.map(section=>`<section><h3>${section.title}</h3><dl class="intel-metrics">${section.metrics.map(metricMarkup).join('')}</dl></section>`).join('')}</div>`:'').join('')}</div>`:'';
 }
 function render(){
@@ -188,7 +188,7 @@ async function createLineupImage(run,mode){
  const lines=[];
  for(const section of column){
    lines.push({text:section.title.toUpperCase(),heading:true});
-   for(const paragraph of section.lines){let line='';for(const word of paragraph.split(' ')){const next=line?`${line} ${word}`:word;if(line&&c.measureText(next).width>462){lines.push({text:line});line=word;}else line=next;}if(line)lines.push({text:line});}
+   for(const metric of section.metrics){const paragraph=metric.value?`${metric.label}: ${metric.value}`:metric.label,indent=metric.item?30:0;let line='',first=true;for(const word of paragraph.split(' ')){const next=line?`${line} ${word}`:word;if(line&&c.measureText(next).width>462-indent){lines.push({text:line,indent,item:first?metric.item:null});first=false;line=word;}else line=next;}if(line)lines.push({text:line,indent,item:first?metric.item:null});}
    lines.push({text:''});
  }
  return lines;
@@ -203,7 +203,7 @@ async function createLineupImage(run,mode){
  for(let n=0;n<5;n++){const sx=x+16+n*142,sy=y+66,s=p.slots[n];box(sx,sy,133,141,7,n<p.capacity?'#0f1724':'#141c29');if(n>=p.capacity){fit('5-slot only',sx+24,sy+76,105,13,'#566c8d');continue;}if(!s){fit('+',sx+56,sy+65,40,30,'#7794bd');fit('Empty slot',sx+27,sy+100,100,12,'#8299ba');continue;}const item=CATALOG.find(item=>item.name===s.item),img=images.get(s.item);if(img){const ratio=Math.min(99/img.naturalWidth,76/img.naturalHeight);const w=img.naturalWidth*ratio,h=img.naturalHeight*ratio;c.drawImage(img,sx+(133-w)/2,sy+10+(76-h)/2,w,h);}fit(s.item,sx+8,sy+108,117,13,'#e2eaf6');fit(`Lv. ${s.level}${s.level===item.max?' · MAX':''}`,sx+8,sy+129,117,11,item.hex);}
  });
  if(sections.length){box(55,intelTop,1490,intelHeight,12,'#141d2a');c.fillStyle=mode.textColor||mode.color;c.font='600 28px "Barlow Condensed", sans-serif';c.fillText('OVERALL STATS',78,intelTop+43);
- intelColumns.forEach((lines,col)=>lines.forEach((line,row)=>{const x=78+col*495,y=intelTop+78+row*29;if(line.heading){box(x,y-21,462,27,4,'#233349');c.fillStyle=mode.color;c.fillRect(x,y-21,3,27);}c.font=line.heading?'700 19px "Barlow Condensed", sans-serif':'400 17px "DM Sans", sans-serif';c.fillStyle=line.heading?(mode.textColor||mode.color):'#b6c5db';c.fillText(line.text,x+(line.heading?12:0),y,line.heading?438:462);}));}
+ intelColumns.forEach((lines,col)=>lines.forEach((line,row)=>{const x=78+col*495,y=intelTop+78+row*29;if(line.heading){box(x,y-21,462,27,4,'#233349');c.fillStyle=mode.color;c.fillRect(x,y-21,3,27);}const icon=line.item?images.get(line.item):null;if(icon){const scale=Math.min(22/icon.naturalWidth,22/icon.naturalHeight),w=icon.naturalWidth*scale,h=icon.naturalHeight*scale;c.drawImage(icon,x+(22-w)/2,y-18+(22-h)/2,w,h);}const indent=line.heading?12:(line.indent||0);c.font=line.heading?'700 19px "Barlow Condensed", sans-serif':'400 17px "DM Sans", sans-serif';c.fillStyle=line.heading?(mode.textColor||mode.color):'#b6c5db';c.fillText(line.text,x+indent,y,462-indent);}));}
  c.fillStyle='#8297b7';c.font='15px "DM Sans", sans-serif';c.fillText('SURVIVE TOGETHER. EVERY SLOT HAS A PURPOSE.',55,canvas.height-29);c.textAlign='right';c.fillText('STN CLAN RUN',1545,canvas.height-29);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Image could not be created.');return blob;
 }
